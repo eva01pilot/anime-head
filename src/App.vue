@@ -5,9 +5,15 @@
 <script setup lang="ts">
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { onMounted, useTemplateRef } from "vue";
+import { onMounted, ref, useTemplateRef } from "vue";
 import { loadModel, makeOrbitControls } from "./utils/three";
-import { plantHairStrand } from "./three-app/hair/generateStrands";
+import {
+  generateLineSegments,
+  generateStrands,
+  getParticlesPositions,
+  samplePoints,
+} from "./three-app/hair/generateStrands";
+import { LineSegmentParticle } from "./three-app/hair/generateStrands";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x333333);
@@ -19,6 +25,16 @@ const camera = new THREE.PerspectiveCamera(
 );
 
 const canvas = useTemplateRef("canvas");
+
+const paused = ref(false);
+
+document.addEventListener("keyup", (e) => {
+  console.log(e.key);
+  if (e.key === " ") {
+    paused.value = !paused.value;
+    console.log(paused.value);
+  }
+});
 
 onMounted(async () => {
   if (!canvas.value) return;
@@ -46,12 +62,32 @@ onMounted(async () => {
   const light = new THREE.AmbientLight(0xffffff); // soft white light
   scene.add(light);
   if (scalp instanceof THREE.Mesh) {
-    plantHairStrand(scalp.geometry.attributes.position);
+    const points = samplePoints(scalp);
+    const strands = generateStrands(points, 4, 5);
+    const segments = generateLineSegments(strands);
+    const linesParticlesArray: LineSegmentParticle[] = [];
+    segments.forEach((seg) => {
+      const linesParticles = new LineSegmentParticle(seg);
+      linesParticlesArray.push(linesParticles);
+      scene.add(seg);
+    });
+
     function animate() {
       renderer.render(scene, camera);
+      linesParticlesArray.forEach((lp) => {
+        if (paused.value) return;
+        lp.updateLine();
+      });
       controls.update();
     }
-    renderer.setAnimationLoop(animate);
+
+    /*
+    renderer.setAnimationLoop((a) => {
+      animate();
+    });
+    */
+
+    setInterval(animate, 50);
   }
 });
 </script>
